@@ -1,0 +1,16 @@
+header:
+        stamp:
+                sec: 1687841018
+                nanosec: 830607578
+        frame_id: "vicon/world/NED"
+
+dt: 10
+poses: 
+        - position:
+                x: 0.0
+                y: 1.0
+                z: 1.0
+        - position:
+                x: 0.0
+                y: 1.0
+                z: 1.0
