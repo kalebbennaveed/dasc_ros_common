@@ -1,6 +1,71 @@
 
 #include "dasc_ros_utils/setpoint_publisher.hpp"
 
+// #include "tf2/convert.h"
+// #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
+
+// namespace tf2 {
+//
+//	using namespace geometry_msgs::msg;
+//	using namespace dasc_msgs::msg;
+//
+//	// really annoying but galactic doesnt have this defined.
+//	void doTransform(const Vector3& in, Vector3 &out, const TransformStamped
+//&t) { 		Vector3Stamped inS, outS; 		inS.vector.x = in.x(); 		inS.vector.y = in.y();
+//		inS.vector.z = in.z();
+//		doTransform(inS, outS, t);
+//		out.setX(0.0);
+//	}
+//
+//
+//	void doTransform(const Twist& in, Twist &out, const TransformStamped &
+//t) { 		doTransform(in.linear, out.linear, t); 		doTransform(in.angular,
+//out.angular, t);
+//	}
+//
+//	void doTransform(const Accel & in, Accel &out, const TransformStamped &
+//t) { 		doTransform(in.linear, out.linear, t); 		doTransform(in.angular,
+//out.angular, t);
+//	}
+//
+//
+//	void doTransform(const DITrajectory& in, DITrajectory &out, const
+//TransformStamped & t) {
+//	  // update the header
+//	  out.header.stamp = t.header.stamp;
+//	  out.header.frame_id = t.child_frame_id;
+//	  out.dt = in.dt;
+//
+//	  // now do the transform of each pose
+//	  out.poses.clear();
+//	  for (auto p:in.poses) {
+//	  	geometry_msgs::msg::Pose pp;
+//	  	tf2::doTransform(p, pp, t);
+//	  	out.poses.push_back(pp);
+//	  }
+//	  // repeat for the twists
+//	  out.twists.clear();
+//	  for (auto p:in.twists) {
+//	  	geometry_msgs::msg::Twist pp;
+//	  	tf2::doTransform(p, pp, t);
+//	  	out.twists.push_back(pp);
+//	  }
+//	  // repeat for the accels
+//	  out.accelerations.clear();
+//	  for (auto p:in.accelerations) {
+//	  	geometry_msgs::msg::Accel pp;
+//	  	tf2::doTransform(p, pp, t);
+//	  	out.accelerations.push_back(pp);
+//	    }
+//	}
+//
+//}
+//
+//
+//
+//
+//
+
 SetpointPublisher::SetpointPublisher() : Node("setpoint_publisher") {
   // declare parameters
 
@@ -26,7 +91,7 @@ SetpointPublisher::SetpointPublisher() : Node("setpoint_publisher") {
 
   // create a publisher of the px4 setpoint
   pub_setpoint_ = this->create_publisher<px4_msgs::msg::TrajectorySetpoint>(
-      px4_robot_name + "/fmu/in/trajectory_setpoint", 10);
+      px4_robot_name_ + "/fmu/in/trajectory_setpoint", 10);
   pub_setpoint_viz_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
       px4_robot_name_ + "/fmu/in/trajectory_setpoint/viz", 10);
 
@@ -76,7 +141,7 @@ void SetpointPublisher::timer_callback() {
     RCLCPP_INFO(this->get_logger(), "woops, message is for the future");
     return; // not yet time to process this message
   }
-  if (index >= N) {
+  if (index >= int(N)) {
     RCLCPP_INFO(this->get_logger(), "woops, message is in the past!");
     timer_->cancel();
     return; // done parsing this message
@@ -88,13 +153,20 @@ void SetpointPublisher::timer_callback() {
   // msg.timestamp; // TODO(dev): figure out what needs to go here
 
   // insert target_pose
-  if (index < N_poses) {
+  if (index < int(N_poses)) {
     auto target_pose = traj_.poses[index];
     msg.position[0] = target_pose.position.x;
     msg.position[1] = target_pose.position.y;
     msg.position[2] = target_pose.position.z;
 
     msg.yaw = 0.0; // TODO(dev): update this!
+
+    // publish the visualization
+    geometry_msgs::msg::PoseStamped viz_msg;
+    viz_msg.header.stamp = this->get_clock()->now();
+    viz_msg.header.frame_id = px4_world_frame_;
+    viz_msg.pose = target_pose;
+    pub_setpoint_viz_->publish(viz_msg);
 
   } else {
     for (size_t i = 0; i < 3; i++) {
@@ -103,7 +175,7 @@ void SetpointPublisher::timer_callback() {
   }
 
   // insert target twists
-  if (index < N_twists) {
+  if (index < int(N_twists)) {
     auto target = traj_.twists[index];
     msg.velocity[0] = target.linear.x;
     msg.velocity[1] = target.linear.y;
@@ -117,14 +189,14 @@ void SetpointPublisher::timer_callback() {
   }
 
   // insert target accels
-  if (index < N_accels) {
+  if (index < int(N_accels)) {
     auto target = traj_.accelerations[index];
     msg.acceleration[0] = target.linear.x;
     msg.acceleration[1] = target.linear.y;
     msg.acceleration[2] = target.linear.z;
   } else {
     for (size_t i = 0; i < 3; i++) {
-      msg.accelerations[i] = NAN;
+      msg.acceleration[i] = NAN;
     }
   }
 
@@ -136,13 +208,6 @@ void SetpointPublisher::timer_callback() {
   // publish the trajectory setpoint and the vizualization of the setpoint pose
   pub_setpoint_->publish(msg);
 
-  // publish the visualization
-  geometry_msgs::msg::PoseStamped viz_msg;
-  viz_msg.header.stamp = this->get_clock()->now();
-  viz_msg.header.frame_id = px4_world_frame_;
-  viz_msg.pose = target_pose;
-
-  pub_setpoint_viz_->publish(viz_msg);
 }
 
 void SetpointPublisher::trajectory_callback(
