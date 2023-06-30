@@ -12,6 +12,7 @@ find_package(dasc_msgs REQUIRED)
 find_package(px4_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2 REQUIRED)
 
 include_directories(include)
 

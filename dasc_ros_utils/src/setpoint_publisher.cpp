@@ -1,5 +1,6 @@
 
 #include "dasc_ros_utils/setpoint_publisher.hpp"
+//#include <tf2/utils.h>
 
 // #include "tf2/convert.h"
 // #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
@@ -116,7 +117,6 @@ SetpointPublisher::SetpointPublisher() : Node("setpoint_publisher") {
 }
 
 void SetpointPublisher::timer_callback() {
-  RCLCPP_INFO(this->get_logger(), "timer callback");
 
   // if we got here, it means that there is a message for us to parse
   auto now = this->get_clock()->now();
@@ -159,7 +159,7 @@ void SetpointPublisher::timer_callback() {
     msg.position[1] = target_pose.position.y;
     msg.position[2] = target_pose.position.z;
 
-    msg.yaw = 0.0; // TODO(dev): update this!
+    msg.yaw = tf2::getYaw(target_pose.orientation);
 
     // publish the visualization
     geometry_msgs::msg::PoseStamped viz_msg;
