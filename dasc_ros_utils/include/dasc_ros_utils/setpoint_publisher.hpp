@@ -42,8 +42,6 @@ protected:
 
   // pubs
   rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr pub_setpoint_;
-  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr
-      pub_setpoint_viz_;
 
   // subs
 
@@ -57,6 +55,8 @@ protected:
   // methods
   void
   trajectory_callback(const dasc_msgs::msg::DITrajectory::SharedPtr msg_ptr);
-
   void timer_callback();
+
+  px4_msgs::msg::TrajectorySetpoint
+  interpolate_trajectory(int index, double delta, bool is_last = false);
 };

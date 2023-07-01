@@ -14,12 +14,10 @@
 // #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 // #endif
 
-
 namespace tf2 {
 
 using namespace geometry_msgs::msg;
 using namespace dasc_msgs::msg;
-
 
 inline double getYaw(const tf2::Quaternion &q) {
   double yaw;
@@ -96,4 +94,4 @@ inline double getYaw(const geometry_msgs::msg::Quaternion &q) {
 
   return tf2::getYaw(tf2::Quaternion(q.x, q.y, q.z, q.w));
 }
-}
+} // namespace tf2
