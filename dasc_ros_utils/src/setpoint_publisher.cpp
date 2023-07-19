@@ -1,70 +1,5 @@
 
 #include "dasc_ros_utils/setpoint_publisher.hpp"
-//#include <tf2/utils.h>
-
-// #include "tf2/convert.h"
-// #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
-
-// namespace tf2 {
-//
-//	using namespace geometry_msgs::msg;
-//	using namespace dasc_msgs::msg;
-//
-//	// really annoying but galactic doesnt have this defined.
-//	void doTransform(const Vector3& in, Vector3 &out, const TransformStamped
-//&t) { 		Vector3Stamped inS, outS; 		inS.vector.x =
-//in.x(); inS.vector.y = in.y(); 		inS.vector.z = in.z();
-// doTransform(inS, outS, t); 		out.setX(0.0);
-//	}
-//
-//
-//	void doTransform(const Twist& in, Twist &out, const TransformStamped &
-// t) { 		doTransform(in.linear, out.linear, t);
-// doTransform(in.angular, out.angular, t);
-//	}
-//
-//	void doTransform(const Accel & in, Accel &out, const TransformStamped &
-// t) { 		doTransform(in.linear, out.linear, t);
-// doTransform(in.angular, out.angular, t);
-//	}
-//
-//
-//	void doTransform(const DITrajectory& in, DITrajectory &out, const
-// TransformStamped & t) {
-//	  // update the header
-//	  out.header.stamp = t.header.stamp;
-//	  out.header.frame_id = t.child_frame_id;
-//	  out.dt = in.dt;
-//
-//	  // now do the transform of each pose
-//	  out.poses.clear();
-//	  for (auto p:in.poses) {
-//	  	geometry_msgs::msg::Pose pp;
-//	  	tf2::doTransform(p, pp, t);
-//	  	out.poses.push_back(pp);
-//	  }
-//	  // repeat for the twists
-//	  out.twists.clear();
-//	  for (auto p:in.twists) {
-//	  	geometry_msgs::msg::Twist pp;
-//	  	tf2::doTransform(p, pp, t);
-//	  	out.twists.push_back(pp);
-//	  }
-//	  // repeat for the accels
-//	  out.accelerations.clear();
-//	  for (auto p:in.accelerations) {
-//	  	geometry_msgs::msg::Accel pp;
-//	  	tf2::doTransform(p, pp, t);
-//	  	out.accelerations.push_back(pp);
-//	    }
-//	}
-//
-//}
-//
-//
-//
-//
-//
 
 SetpointPublisher::SetpointPublisher() : Node("setpoint_publisher") {
   // declare parameters
@@ -161,7 +96,7 @@ SetpointPublisher::interpolate_trajectory(int index, double delta,
 
   // angular
   msg.yaw = tf2::getYaw(target_pose.orientation);
-  msg.yawspeed = 0.0;
+  msg.yawspeed = 0.0; //TODO: use the yawspeed message
 
   return msg;
 }

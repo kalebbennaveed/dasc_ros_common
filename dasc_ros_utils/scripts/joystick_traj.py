@@ -54,14 +54,14 @@ class JoyTraj(Node):
 
 
         ## timer 
-        self.dt = 0.01  # seconds
+        self.dt = 0.1  # seconds
         self.timer = self.create_timer(self.dt, self.timer_callback)
 
         # variables 
         self.current_pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
         self.goal = np.array([0.0, 0.0, 0.0], dtype=np.float32)
         self.goal_vel = np.array([0.0, 0.0, 0.0], dtype=np.float32)
-        self.goal_yaw = np.pi/2
+        self.goal_yaw = 0.0 
         self.got_joystick = False
         self.got_position = True    # TODO: change back to false
 
@@ -70,7 +70,7 @@ class JoyTraj(Node):
         self.FORWARD_CH = 3
         self.FORWARD_SCALE = 1
         self.RIGHT_CH = 2
-        self.RIGHT_SCALE = -1
+        self.RIGHT_SCALE = 1
         self.UP_CH = 1
         self.UP_SCALE = 0.2 # move it up and down more slowly
         self.YAW_CH = 0

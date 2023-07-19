@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+import time
 import rclpy
 from rclpy.node import Node
 
@@ -7,7 +9,8 @@ from geometry_msgs.msg import PolygonStamped, Point32
 class MinimalPublisher(Node):
 
     def __init__(self):
-        super().__init__('minimal_publisher')
+        super().__init__('lab_polygon_publisher')
+
         self.publisher_ = self.create_publisher(PolygonStamped, 'lab_polygon', 10)
         
         msg = PolygonStamped()
@@ -26,14 +29,17 @@ class MinimalPublisher(Node):
             msg.polygon.points.append(p)
 
 
-        self.publisher_.publish(msg)
+        N = 5
+        for i in range(5):
+            self.publisher_.publish(msg)
+            time.sleep(1)
+            self.get_logger().info(f"publishing lab poly [{i}/{N}]...")
+
 
 def main(args=None):
     rclpy.init(args=args)
 
     minimal_publisher = MinimalPublisher()
-
-    # rclpy.spin(minimal_publisher)
 
     minimal_publisher.destroy_node()
     rclpy.shutdown()
