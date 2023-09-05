@@ -5,6 +5,7 @@
 
 #include "geometry_msgs/msg/accel.hpp"
 #include "geometry_msgs/msg/pose.hpp"
+#include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
@@ -21,6 +22,7 @@
 #include "tf2_ros/transform_listener.h"
 
 #include "conversions.hpp"
+#include "timer.hpp"
 
 class SetpointPublisher : public rclcpp::Node {
 
@@ -39,9 +41,12 @@ protected:
   std::string px4_robot_name_;
   std::string px4_world_frame_;
   std::string trajectory_topic_;
+  double publish_rate_ = 50.0; // hz
+  double skip_dt_ms_ = 20.0; // duration to skip when publishing
 
   // pubs
   rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr pub_setpoint_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pub_traj_msg_viz_;
 
   // subs
 
@@ -56,6 +61,7 @@ protected:
   void
   trajectory_callback(const dasc_msgs::msg::DITrajectory::SharedPtr msg_ptr);
   void timer_callback();
+  void debug_timer_callback();
 
   px4_msgs::msg::TrajectorySetpoint
   interpolate_trajectory(int index, double delta, bool is_last = false);
