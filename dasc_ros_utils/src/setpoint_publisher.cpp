@@ -13,6 +13,10 @@ SetpointPublisher::SetpointPublisher() : Node("setpoint_publisher") {
   px4_world_frame_ = this->declare_parameter<std::string>("px4_local_frame",
                                                           "vicon/world/NED");
 
+  publish_rate_ = this->declare_parameter<double>("publish_rate_hz", publish_rate_);
+  skip_dt_ms_ = this->declare_parameter<double>("skip_dt_ms", skip_dt_ms_);
+  terminal_yaw_freq_ = this-> declare_parameter<double>("terminal_yaw_freq_hz", terminal_yaw_freq_);
+
   trajectory_topic_ =
       this->declare_parameter<std::string>("trajectory_topic", "trajectory");
 
@@ -26,7 +30,10 @@ SetpointPublisher::SetpointPublisher() : Node("setpoint_publisher") {
 
   // create a publisher of the px4 setpoint
   pub_setpoint_ = this->create_publisher<px4_msgs::msg::TrajectorySetpoint>(
-      px4_robot_name_ + "/fmu/in/trajectory_setpoint", 100);
+      px4_robot_name_ + "/fmu/in/trajectory_setpoint", 10);
+
+  pub_traj_msg_viz_ = this->create_publisher<geometry_msgs::msg::PoseArray>(
+		  px4_robot_name_ + "/viz/trajectory", 10);
 
   // subscribe to dasc_msgs/DITrajectory
   traj_sub_.subscribe(this, trajectory_topic_);
@@ -39,11 +46,8 @@ SetpointPublisher::SetpointPublisher() : Node("setpoint_publisher") {
 
   // initialize the timer
   timer_ = this->create_wall_timer(
-      20ms, std::bind(&SetpointPublisher::timer_callback, this));
-
-  // start by cancelling the timer, so it waits for a trajectory message and not
-  // consumes resources
-  // timer_->cancel();
+      std::chrono::duration<double>(1.0 / publish_rate_), 
+      std::bind(&SetpointPublisher::timer_callback, this));
 
   RCLCPP_INFO(this->get_logger(), "starting setpoint publisher node");
 }
@@ -51,8 +55,8 @@ SetpointPublisher::SetpointPublisher() : Node("setpoint_publisher") {
 px4_msgs::msg::TrajectorySetpoint
 SetpointPublisher::interpolate_trajectory(int index, double delta,
                                           bool is_last) {
-  // returns the trajectory setpoint at index + a small amount of time delta <
-  // traj_.dt assumes that all the relevant indices exist
+  // returns the trajectory setpoint at index + a small amount of time delta
+  // assumes that all the relevant indices exist
 
   px4_msgs::msg::TrajectorySetpoint msg;
   msg.raw_mode = false;
@@ -95,116 +99,133 @@ SetpointPublisher::interpolate_trajectory(int index, double delta,
   }
 
   // angular
-  msg.yaw = tf2::getYaw(target_pose.orientation);
-  msg.yawspeed = 0.0; //TODO: use the yawspeed message
+  { 
+
+    double terminal_omega = 2.0 * M_PI * terminal_yaw_freq_;
+    msg.yawspeed = is_last ? terminal_omega : target_vel.angular.z; 
+    msg.yaw = tf2::getYaw(target_pose.orientation) + msg.yawspeed * delta;
+  }
 
   return msg;
 }
 
 void SetpointPublisher::timer_callback() {
+  
+  //debug_timer_callback();
+  //
+  if (!traj_is_initialized) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *(get_clock()), 1000.0, "waiting for traj msg on topic %s...", traj_sub_.getTopic().c_str());
+    return;
+  }
+
+  timer::Timer callbackTimer("setpoint publisher", false);
+
+  size_t N = traj_.poses.size(); 
+  bool is_last = false;
 
   // if we got here, it means that there is a message for us to parse
   auto now = this->get_clock()->now();
   double t = (now - traj_.header.stamp).seconds();
 
-  // get the total length of the messages
-  size_t N_poses = traj_.poses.size();
-  size_t N_twists = traj_.twists.size();
-  size_t N_accels = traj_.accelerations.size();
+  // query at t + dt into the future
+  t += 0.001 * skip_dt_ms_; 
 
-  size_t N = std::max(std::max(N_poses, N_twists), N_accels);
-  bool is_last = false;
+  int index = t / traj_.dt; // integer division rounds down
 
-  if (N == 0) {
-    // RCLCPP_INFO(this->get_logger(), "woops, no poses in this message");
-    // timer_->cancel();
+  // RCLCPP_INFO(get_logger(), "index: %d, tau: %f", index, tau);
+
+  if (index < 0) {
+    RCLCPP_WARN(this->get_logger(), "woops, message is for the future");
+    return; // not yet time to process this message
+  }
+  if (index >= int(N)) {
+    index = N - 1;
+    is_last = true;
+  }
+
+  // determine how far between two messages it is
+  double tau = t - index * traj_.dt;
+
+  auto msg = interpolate_trajectory(index, tau, is_last);
+
+  pub_setpoint_->publish(msg);
+
+  constexpr float kTimeBetweenDebugMessages = 1000.0; // ms
+  RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), kTimeBetweenDebugMessages, callbackTimer.log().c_str());
+
+}
+
+void SetpointPublisher::debug_timer_callback() {
+
+  // get the latest quad state
+  auto now = get_clock() -> now();
+
+  // get the latest quad state
+  geometry_msgs::msg::TransformStamped trans;
+  try {
+    trans = tf2_buffer_ -> lookupTransform("vicon/world", "vicon/px4_1/px4_1", tf2::TimePointZero);
+  }
+  catch (const tf2::TransformException &ex) {
+    RCLCPP_INFO(get_logger(), "could not tf: %s", ex.what());
     return;
   }
+
+  // see time time delta
+  RCLCPP_INFO(get_logger(), "last state was %f seconds ago", (now - trans.header.stamp).seconds());
+
+  // get the relative time of where the quad should be
+  double t = (rclcpp::Time(trans.header.stamp) - rclcpp::Time(traj_.header.stamp)).seconds();
+  
+  RCLCPP_INFO(get_logger(), "rel time:  %f seconds", t); 
+  
+  size_t N = traj_.poses.size(); 
+  bool is_last = false;
 
   int index = t / traj_.dt; // integer division rounds down
   double tau = t - index * traj_.dt;
 
-  // index = N; // just force it to go to the last place
-
   if (index < 0) {
-    RCLCPP_INFO(this->get_logger(), "woops, message is for the future");
-    return; // not yet time to process this message
+    RCLCPP_WARN(this->get_logger(), "woops, tried to query quad state before traj msg");
+    return; 
   }
   if (index >= int(N)) {
-    // RCLCPP_INFO(this->get_logger(), "woops, message is in the past!");
     index = N - 1;
     is_last = true;
-    // use the last waypoint, but with 0 speed
-    // return; // done parsing this message
   }
 
-  auto msg = interpolate_trajectory(index, tau, is_last);
+  auto msg = interpolate_trajectory(index, tau, is_last);  // this is the expected state at this time
 
-  // initialize the message
-  // px4_msgs::msg::TrajectorySetpoint msg;
-  // msg.raw_mode = false;
-  // msg.timestamp; // TODO(dev): figure out what needs to go here
+  // print the delta with the true state:
+  RCLCPP_INFO(get_logger(), 
+      "Expected: (%f, %f, %f) :: True: (%f, %f, %f)",
+      msg.position[1], msg.position[0], -msg.position[2],
+      trans.transform.translation.x, trans.transform.translation.y, trans.transform.translation.z);
 
-  // // insert target_pose
-  // if (index < int(N_poses)) {
-  //   auto target_pose = traj_.poses[index];
-  //   msg.position[0] = target_pose.position.x;
-  //   msg.position[1] = target_pose.position.y;
-  //   msg.position[2] = target_pose.position.z;
-
-  //   msg.yaw = tf2::getYaw(target_pose.orientation);
-  //   // RCLCPP_INFO(this->get_logger(), "REQUESTING [%.3f, %.3f, %.3f] %.3f",
-  //   // msg.position[0], msg.position[1], msg.position[2], msg.yaw);
-
-  // } else {
-  //   for (size_t i = 0; i < 3; i++) {
-  //     msg.position[i] = 0.0; // NAN;
-  //   }
-  // }
-
-  // // insert target twists
-  // if (!is_last) {
-  //   if (index < int(N_twists)) {
-  //     auto target = traj_.twists[index];
-  //     msg.velocity[0] = target.linear.x;
-  //     msg.velocity[1] = target.linear.y;
-  //     msg.velocity[2] = target.linear.z;
-
-  //     msg.yawspeed = 0.0; // TODO(dev): update this!
-  //   } else {
-  //     for (size_t i = 0; i < 3; i++) {
-  //       msg.velocity[i] = 0.0; // NAN;
-  //     }
-  //   }
-  // }
-
-  // // insert target accels
-  // if (!is_last) {
-  //   if (index < int(N_accels)) {
-  //     auto target = traj_.accelerations[index];
-  //     msg.acceleration[0] = target.linear.x;
-  //     msg.acceleration[1] = target.linear.y;
-  //     msg.acceleration[2] = target.linear.z;
-  //   } else {
-  //     for (size_t i = 0; i < 3; i++) {
-  //       msg.acceleration[i] = 0.0; // NAN;
-  //     }
-  //   }
-  // }
-
-  // // insert target jerks
-  // if (!is_last) {
-  //   for (size_t i = 0; i < 3; i++) {
-  //     msg.jerk[i] = 0.0; // NAN;
-  //   }
-  // }
-
-  // publish the trajectory setpoint and the vizualization of the setpoint pose
-  pub_setpoint_->publish(msg);
 }
 
 void SetpointPublisher::trajectory_callback(
     const dasc_msgs::msg::DITrajectory::SharedPtr msg) {
+
+  // check the message 
+
+  // get the total length of the messages
+  size_t N_poses = msg->poses.size();
+  size_t N_twists = msg->twists.size();
+  size_t N_accels = msg->accelerations.size();
+  size_t N = N_poses;
+
+  if (N_poses <= 1) {
+    RCLCPP_DEBUG(get_logger(), "trajectory msg has no poses.");
+    return;
+  }
+
+  if ( (N_poses != N) || (N_twists != N) || (N_accels != N) ) {
+    RCLCPP_DEBUG(get_logger(), "trajectory msg has incorrect number of poses");
+    return;
+  }
+
+
+  // passed all checks
 
   geometry_msgs::msg::TransformStamped trans;
 
@@ -212,18 +233,24 @@ void SetpointPublisher::trajectory_callback(
     trans = tf2_buffer_->lookupTransform(px4_world_frame_, msg->header.frame_id,
                                          msg->header.stamp);
   } catch (const tf2::TransformException &ex) {
-    RCLCPP_WARN(this->get_logger(), "Failure %s\n", ex.what());
+    RCLCPP_WARN(get_logger(), "Failure %s\n", ex.what());
     return;
   }
 
   // since the transform was successful we can save the trajectory callback
   tf2::doTransform(*msg, traj_, trans);
 
-  // restart the timer
-  // if (timer_->is_canceled()) {
-  //  RCLCPP_INFO(this->get_logger(), "restarting timer");
-  //  timer_->reset();
-  //}
+  traj_is_initialized = true;
+
+  // // // now publish the pose array for visualizations
+  // geometry_msgs::msg::PoseArray viz_msg;
+  // viz_msg.header = traj_.header;
+  // viz_msg.header.frame_id = px4_world_frame_;
+  // viz_msg.poses = traj_.poses;
+  // pub_traj_msg_viz_ -> publish(viz_msg);
+  //
+  //
+
 }
 
 int main(int argc, char *argv[]) {
