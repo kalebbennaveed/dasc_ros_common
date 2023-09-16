@@ -15,6 +15,7 @@ SetpointPublisher::SetpointPublisher() : Node("setpoint_publisher") {
 
   publish_rate_ = this->declare_parameter<double>("publish_rate_hz", publish_rate_);
   skip_dt_ms_ = this->declare_parameter<double>("skip_dt_ms", skip_dt_ms_);
+  terminal_yaw_freq_ = this-> declare_parameter<double>("terminal_yaw_freq_hz", terminal_yaw_freq_);
 
   trajectory_topic_ =
       this->declare_parameter<std::string>("trajectory_topic", "trajectory");
@@ -99,11 +100,10 @@ SetpointPublisher::interpolate_trajectory(int index, double delta,
 
   // angular
   { 
-    double yaw = tf2::getYaw(target_pose.orientation);
-    double yawspeed = is_last ? 0.0 : target_vel.angular.z; 
 
-    msg.yaw = yaw + yawspeed * delta;
-    msg.yawspeed = yawspeed ;
+    double terminal_omega = 2.0 * M_PI * terminal_yaw_freq_;
+    msg.yawspeed = is_last ? terminal_omega : target_vel.angular.z; 
+    msg.yaw = tf2::getYaw(target_pose.orientation) + msg.yawspeed * delta;
   }
 
   return msg;
@@ -131,7 +131,6 @@ void SetpointPublisher::timer_callback() {
   t += 0.001 * skip_dt_ms_; 
 
   int index = t / traj_.dt; // integer division rounds down
-  double tau = t - index * traj_.dt;
 
   // RCLCPP_INFO(get_logger(), "index: %d, tau: %f", index, tau);
 
@@ -143,6 +142,9 @@ void SetpointPublisher::timer_callback() {
     index = N - 1;
     is_last = true;
   }
+
+  // determine how far between two messages it is
+  double tau = t - index * traj_.dt;
 
   auto msg = interpolate_trajectory(index, tau, is_last);
 

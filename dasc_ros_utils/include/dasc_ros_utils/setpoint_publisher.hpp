@@ -43,6 +43,7 @@ protected:
   std::string trajectory_topic_;
   double publish_rate_ = 50.0; // hz
   double skip_dt_ms_ = 20.0; // duration to skip when publishing
+  double terminal_yaw_freq_ = 0.0; // hz
 
   // pubs
   rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr pub_setpoint_;
