@@ -16,6 +16,9 @@ SetpointPublisher::SetpointPublisher() : Node("setpoint_publisher") {
   publish_rate_ = this->declare_parameter<double>("publish_rate_hz", publish_rate_);
   skip_dt_ms_ = this->declare_parameter<double>("skip_dt_ms", skip_dt_ms_);
   terminal_yaw_freq_ = this-> declare_parameter<double>("terminal_yaw_freq_hz", terminal_yaw_freq_);
+  terminal_yaw_amplitude_ = this->declare_parameter<double>("terminal_yaw_amplitude_rad", terminal_yaw_amplitude_);
+  terminal_z_freq_ = this-> declare_parameter<double>("terminal_z_freq_hz", terminal_z_freq_);
+  terminal_z_amplitude_ = this->declare_parameter<double>("terminal_z_amplitude_m", terminal_z_amplitude_);
 
   trajectory_topic_ =
       this->declare_parameter<std::string>("trajectory_topic", "trajectory");
@@ -92,18 +95,40 @@ SetpointPublisher::interpolate_trajectory(int index, double delta,
     double v = is_last ? 0.0 : target_vel.linear.z;
     double a = is_last ? 0.0 : target_acc.linear.z;
 
+
     msg.position[2] = p + v * delta + 0.5 * a * delta * delta;
     msg.velocity[2] = v + a * delta;
     msg.acceleration[2] = a;
     msg.jerk[2] = 0.0;
+    
+    if (is_last) 
+    {
+	    // add some up-down motion
+	    double omega = 2* M_PI * terminal_z_freq_;
+	    double add_p = terminal_z_amplitude_ * std::sin(omega * delta);
+	    double add_v = omega * terminal_z_amplitude_ * std::cos(omega * delta);
+
+	    msg.position[2] += add_p;
+	    msg.velocity[2] += add_v;
+
+    }
   }
 
   // angular
   { 
 
-    double terminal_omega = 2.0 * M_PI * terminal_yaw_freq_;
-    msg.yawspeed = is_last ? terminal_omega : target_vel.angular.z; 
+    msg.yawspeed = is_last ? 0.0 : target_vel.angular.z; 
     msg.yaw = tf2::getYaw(target_pose.orientation) + msg.yawspeed * delta;
+    if (is_last) {
+	    double terminal_omega = 2.0 * M_PI * terminal_yaw_freq_;
+
+	    double terminal_yaw = terminal_yaw_amplitude_ * std::sin(terminal_omega * delta);
+	    double terminal_yawspeed = terminal_omega * terminal_yaw_amplitude_ * std::cos(terminal_omega * delta);
+
+	    msg.yaw += terminal_yaw;
+	    msg.yawspeed += terminal_yawspeed;
+    }
+	    
   }
 
   return msg;

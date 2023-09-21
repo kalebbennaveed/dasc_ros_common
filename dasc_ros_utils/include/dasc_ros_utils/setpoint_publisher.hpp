@@ -44,6 +44,9 @@ protected:
   double publish_rate_ = 50.0; // hz
   double skip_dt_ms_ = 20.0; // duration to skip when publishing
   double terminal_yaw_freq_ = 0.0; // hz
+  double terminal_yaw_amplitude_ = 30.0 * M_PI / 180.0; // radians
+  double terminal_z_freq_ = 0.0; // hz
+  double terminal_z_amplitude_ = 0.15; // meters
 
   // pubs
   rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr pub_setpoint_;
