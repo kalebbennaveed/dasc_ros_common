@@ -13,7 +13,10 @@ find_package(geometry_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/DIState.msg"
+  "msg/DIAcc.msg"
   "msg/DITrajectory.msg"
+  "msg/DITrajectorySimple.msg"
   "msg/EwareMissionStatus.msg"
   DEPENDENCIES geometry_msgs
   )
