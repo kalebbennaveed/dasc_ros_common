@@ -18,6 +18,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/DITrajectory.msg"
   "msg/DITrajectorySimple.msg"
   "msg/EwareMissionStatus.msg"
+  "msg/CandToSp.msg"
+  "msg/SpToCand.msg"
   DEPENDENCIES geometry_msgs
   )
 
