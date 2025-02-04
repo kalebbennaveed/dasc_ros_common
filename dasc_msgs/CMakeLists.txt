@@ -21,6 +21,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CandToSp.msg"
   "msg/SpToCand.msg"
   "msg/MeschMissionStatus.msg"
+  "msg/QuadToBaseMesch.msg"
+  "msg/BaseToQuadMesch.msg"
   DEPENDENCIES geometry_msgs
   )
 
