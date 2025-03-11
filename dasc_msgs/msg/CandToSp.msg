@@ -6,3 +6,4 @@
 
 bool cand_precomp_done # Precompilation is done_charging
 string cand_mode # The status of the mode in the candidate trajectory node
+float32[3] charge_position # in meters ENU
